@@ -1,5 +1,9 @@
 all: rcopy
 
+run:
+	clear
+	./rcopy
+
 rcopy:
 	clear
 	@echo "Compiling rcopy"
