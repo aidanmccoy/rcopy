@@ -8,6 +8,7 @@
 
 #include "rcopy.h"
 #include "cpe464.h"
+#include "networks.h"
 
 
 static char* localFile;

@@ -4,13 +4,28 @@
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <stdint.h>
+#include <unistd.h>
 
 #include "server.h"
 #include "cpe464.h"
+#include "networks.h"
+
+
+typedef enum State STATE;
+
+enum State {
+	START, DONE
+};
 
 static float errorPercent;
-static int32_t portNumber;
-static pid_t pid;
+int32_t portNumber = 0;
+pid_t pid;
+int32_t serverSK;
+uint8_t buffer[MAX_LEN];
+Connection client;
+int32_t recv_len;
+uint8_t flag;
+int32_t seq_num;
 
 void printGlobals() {
 	printf("GLOBALS------\n");
@@ -23,7 +38,32 @@ int main(int argc, char *argv[])
 {
 	parseArgs(argc, argv);
 	printGlobals();
-	printf("DONE\n");
+
+	sendtoErr_init(errorPercent, DROP_ON, FLIP_ON, DEBUG_ON, RSEED_ON);
+
+	serverSK = udp_server(portNumber);
+	printf("UDP Server set up...");
+	
+
+	while(1) {
+		if (select_call(serverSK, 1, 0, NOT_NULL)  == 1) {
+			recv_len = recv_buf(buffer, 1000, serverSK, &client, &flag, &seq_num);
+
+			if(recv_len == -1) { //Checksum Error
+				printf("Checksum Error, ignore packet\n");
+			} else {
+				pid = fork();
+				if (pid < 0) {
+					perror("Error on fork, exiting...");
+					exit(-1);
+				}
+				if (pid == 0) {
+					//sendFile(...);
+					exit(0);
+				}
+			}
+		}
+	}
 	return 0;
 }
 

@@ -1,21 +1,69 @@
-all: rcopy server
+# Makefile for CPE464 library
+#
+# You should modify this makefile to meet your needs and to meet the
+# requirements of the assignment.  This makefile is only provided as
+# an example.  You can use it as much as you want but using this makefile
+# is not required.
 
-run:
-	clear
-	./rcopy localTest remoteTest 1 2 3.5 208.94.61.49 8080
-	@echo "RUNNING SERVER"
-	./server 3.5 4040
+CC = gcc
+CFLAGS = -g -Wall -Werror
 
-rcopy: rcopy.c rcopy.h
-	clear
-	@echo "Compiling rcopy"
-	gcc -o rcopy rcopy.c
+OS = $(shell uname -s)
+ifeq ("$(OS)", "Linux")
+	LIBS1 = -lstdc++
+endif
 
-server: server.c server.h
-	@echo "COMPILING SERVER"
-	gcc -o server server.c
+LIBS += -lstdc++
 
-clean:
-	clear
-	rm rcopy
-	
+SRCS = $(shell ls *.cpp *.c 2> /dev/null)
+OBJS = $(shell ls *.cpp *.c 2> /dev/null | sed s/\.c[p]*$$/\.o/ )
+LIBNAME = $(shell ls *cpe464*.a)
+
+ALL = rcopy server
+
+all: $(OBJS) $(ALL)
+
+lib:
+	make -f lib.mk
+
+echo:
+	@echo "Objects: $(OBJS)"
+	@echo "LIBNAME: $(LIBNAME)"
+
+.cpp.o:
+	@echo "-------------------------------"
+	@echo "*** Building $@"
+	$(CC) -c $(CFLAGS) $< -o $@ $(LIBS1)
+
+.c.o:
+	@echo "-------------------------------"
+	@echo "*** Building $@"
+	$(CC) -c $(CFLAGS) $< -o $@ $(LIBS1)
+
+rcopy: rcopy.c 
+	@echo "-------------------------------"
+	@echo "*** Linking $@ with library $(LIBNAME)... "
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBNAME) $(LIBS)
+	@echo "*** Linking Complete!"
+	@echo "-------------------------------"
+
+server: server.c networks.o
+	@echo "-------------------------------"
+	@echo "*** Linking $@ with library $(LIBNAME)... "
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBNAME) $(LIBS)
+	@echo "*** Linking Complete!"
+	@echo "-------------------------------"
+
+test: test.c
+	@echo "-------------------------------"
+	@echo "*** Linking $@ with library $(LIBNAME)... "
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBNAME) $(LIBS)
+	@echo "*** Linking Complete!"
+	@echo "-------------------------------"
+
+# clean targets for Solaris and Linux
+clean: 
+	@echo "-------------------------------"
+	@echo "*** Cleaning Files..."
+	rm -f *.o $(ALL)
+	@echo "-------------------------------"
