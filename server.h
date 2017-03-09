@@ -6,3 +6,5 @@
 #include <stdint.h>
 
 void parseArgs(int, char**);
+
+void sendFile();

@@ -5,6 +5,7 @@
 #include <sys/types.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <sys/wait.h>
 
 #include "server.h"
 #include "cpe464.h"
@@ -14,7 +15,7 @@
 typedef enum State STATE;
 
 enum State {
-	START, DONE
+	START, DONE, FILENAME, SENDPACKET, PROCESSPACKET, ACK, BYE
 };
 
 static float errorPercent;
@@ -26,6 +27,8 @@ Connection client;
 int32_t recv_len;
 uint8_t flag;
 int32_t seq_num;
+int status;
+//Make packet file type
 
 void printGlobals() {
 	printf("GLOBALS------\n");
@@ -62,9 +65,16 @@ int main(int argc, char *argv[])
 					exit(0);
 				}
 			}
+			while (waitpid(-1, &status, WNOHANG) > 0) {
+				printf("Child completed... with status %d", status);
+			}
 		}
 	}
 	return 0;
+}
+
+void sendFile() {
+	//CODE NEEDED
 }
 
 void parseArgs(int argc, char** argv) {
