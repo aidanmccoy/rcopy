@@ -2,17 +2,21 @@
 #include <stdio.h>
 #include <string.h>
 #include <arpa/inet.h>
+#include <sys/types.h>
+#include <stdint.h>
 
 
 #include "rcopy.h"
+#include "cpe464.h"
+
 
 static char* localFile;
 static char* remoteFile;
-static int windowSize;
-static int bufferSize;
+static int32_t windowSize;
+static int32_t bufferSize;
 static float errorPercent;
 static struct in_addr remoteMachine;
-static int remotePort;
+static int32_t remotePort;
 
 void printVars() {
 	printf("GOLBALS-------\n");
