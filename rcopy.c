@@ -4,6 +4,7 @@
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <stdint.h>
+#include <unistd.h>
 
 
 #include "rcopy.h"
@@ -17,7 +18,12 @@ static int32_t windowSize;
 static int32_t bufferSize;
 static float errorPercent;
 static struct in_addr remoteMachine;
-static int32_t remotePort;
+static int16_t remotePort;
+Packet * windowBuffer;
+STATE state = FILENAME;
+Connection server;
+int attemptCount = 0;
+
 
 void printVars() {
 	printf("GOLBALS-------\n");
@@ -36,6 +42,53 @@ int main(int argc, char** argv) {
 	parseArgs(argc, argv);
 
 	printVars();
+
+	sendtoErr_init(errorPercent, DROP_ON, FLIP_ON, DEBUG_ON, RSEED_ON);
+
+	initWindow();
+
+	while (state != DONE) {
+		switch (state) {
+			case FILENAME:
+				printf("CASE FILENAME\n");
+
+				if (udp_client_setup(inet_ntoa(remoteMachine), remotePort, &server) < 0) {
+					perror("Error on udp_client_setup exiting...");
+					exit(-1);
+				}
+				printf("_filename call\n");
+				state = filename();
+
+				if (state != FILENAME) {
+					break;
+				} 
+
+				else {
+					close(server.sk_num);
+					printf("_socket closed\n");
+					attemptCount++;
+					printf("_attemptCount is : %d\n",attemptCount );
+					if (attemptCount > 9) {
+						printf("Server Unreachable, exiting...\n");
+						state = DONE;
+					}
+				}
+				break;
+			case FILENAMEOK:
+				break;
+			case RECVDATA:
+				break;
+			case ACK:
+				break;
+			case SREJ:
+				break;
+			case BYE:
+				break;
+			case DONE:
+				break;
+		}
+	}
+
 	printf("DONE\n");	
 
 }
@@ -61,4 +114,12 @@ void parseArgs(int argc, char** argv) {
 	errorPercent = atof(argv[5]);
 	inet_aton(argv[6], &remoteMachine);
 	remotePort = atoi(argv[7]);
+}
+
+void initWindow() {
+	windowBuffer = malloc(sizeof(WindowData) * windowSize);
+}
+
+STATE filename() {
+	return FILENAME;
 }

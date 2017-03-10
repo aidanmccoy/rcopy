@@ -15,7 +15,7 @@
 typedef enum State STATE;
 
 enum State {
-	START, DONE, FILENAME, SENDPACKET, PROCESSPACKET, ACK, BYE
+	FILENAME, SENDPACKET, PROCESSPACKET, ACK, BYE, DONE
 };
 
 static float errorPercent;

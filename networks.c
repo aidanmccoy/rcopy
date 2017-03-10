@@ -48,6 +48,33 @@ int32_t udp_server(int32_t portNumber) {
 	return(sk);
 }
 
+int32_t udp_client_setup(char * hostname, uint16_t port_num, Connection * connection) {
+	struct hostent * hp = NULL; 
+
+	connection->sk_num = 0;
+	connection->len = sizeof(struct sockaddr_in);
+
+	if ((connection->sk_num = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+		perror("udp_client_setup , socket");
+		exit(-1);
+	}
+
+	connection->remote.sin_family = AF_INET;
+
+	hp = gethostbyname(hostname);
+
+	if (hp == NULL) {
+		printf("Host not found: %s\n", hostname);
+		return -1;
+	}
+
+	memcpy(&(connection->remote.sin_addr), hp->h_addr,hp->h_length);
+
+	connection->remote.sin_port = htons(port_num);
+
+	return 0;
+}
+
 int32_t select_call(int32_t socket_num, int32_t seconds, int32_t microseconds, int32_t set_null) {
 	fd_set fdvar;
 	struct timeval aTimeout;

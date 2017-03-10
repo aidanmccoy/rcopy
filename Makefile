@@ -40,7 +40,7 @@ echo:
 	@echo "*** Building $@"
 	$(CC) -c $(CFLAGS) $< -o $@ $(LIBS1)
 
-rcopy: rcopy.c 
+rcopy: rcopy.c networks.o
 	@echo "-------------------------------"
 	@echo "*** Linking $@ with library $(LIBNAME)... "
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBNAME) $(LIBS)
@@ -67,3 +67,13 @@ clean:
 	@echo "*** Cleaning Files..."
 	rm -f *.o $(ALL)
 	@echo "-------------------------------"
+
+rs:
+	clear
+	@echo "RUNNING SERVER..."
+	./server 0.0 8080
+
+rc:
+	clear
+	@echo "RUNNING CLIENT..."
+	./rcopy localTest remoteTest 1 2 0 127.0.0.1 8080
