@@ -12,17 +12,18 @@
 #include "networks.h"
 
 
-static char* localFile;
-static char* remoteFile;
-static int32_t windowSize;
-static int32_t bufferSize;
-static float errorPercent;
-static struct in_addr remoteMachine;
-static int16_t remotePort;
+char* localFile;
+char* remoteFile;
+int32_t windowSize;
+int32_t bufferSize;
+float errorPercent;
+struct in_addr remoteMachine;
+int16_t remotePort;
 Packet * windowBuffer;
-STATE state = FILENAME;
+STATE state = START;
 Connection server;
 int attemptCount = 0;
+int sequenceNum = 0;
 
 
 void printVars() {
@@ -43,37 +44,24 @@ int main(int argc, char** argv) {
 
 	printVars();
 
-	sendtoErr_init(errorPercent, DROP_ON, FLIP_ON, DEBUG_ON, RSEED_ON);
+	sendtoErr_init(errorPercent, DROP_ON, FLIP_ON, DEBUG_OFF, RSEED_ON);
 
 	initWindow();
 
 	while (state != DONE) {
 		switch (state) {
-			case FILENAME:
-				printf("CASE FILENAME\n");
-
-				if (udp_client_setup(inet_ntoa(remoteMachine), remotePort, &server) < 0) {
-					perror("Error on udp_client_setup exiting...");
-					exit(-1);
-				}
-				printf("_filename call\n");
-				state = filename();
-
-				if (state != FILENAME) {
-					break;
-				} 
-
-				else {
-					close(server.sk_num);
-					printf("_socket closed\n");
-					attemptCount++;
-					printf("_attemptCount is : %d\n",attemptCount );
-					if (attemptCount > 9) {
-						printf("Server Unreachable, exiting...\n");
-						state = DONE;
-					}
-				}
+			case START:
+				
+				printf("\nCASE START\n");
+				state = start();
 				break;
+
+			case FILENAME:
+				
+				printf("\nCASE FILENAME\n");
+				state = filename();
+				break;
+
 			case FILENAMEOK:
 				break;
 			case RECVDATA:
@@ -121,5 +109,84 @@ void initWindow() {
 }
 
 STATE filename() {
-	return FILENAME;
+	printf("_filename call\n");
+
+	STATE returnValue = FILENAME;
+	uint8_t packet[MAX_LEN];
+	uint8_t buf[MAX_LEN];
+	uint8_t flag = 0;
+	int32_t seq_num = 0;
+	int32_t nameLen = strlen(remoteFile) + 1;
+	int32_t recv_check = 0;
+	//static int retryCount = 0;
+	//int32_t buf_size = bufferSize;
+	
+	//int32_t win_size = htonl(windowSize);
+
+	memcpy(buf, &windowSize, 4);
+	memcpy(buf + 4, remoteFile, nameLen);
+
+	send_buf(buf, nameLen + 4, &server, 1, 0, packet);
+	printf("__filename() send buf\n");
+
+	if (select_call(server.sk_num, 1, 0, NOT_NULL) == 1) {
+		printf("__in filename select call\n");
+		recv_check = recv_buf(packet, MAX_LEN, server.sk_num, &server, &flag, &seq_num);
+
+		if (recv_check == -1) {
+			return returnValue;
+		}
+		if (flag == 9) {//Bad file name
+			printf("__Bad file name\n");
+			returnValue = BYE;
+		} 
+		else if (flag == 8) { //Good file name flag
+			printf("__good file name\n");
+			returnValue = FILENAMEOK;
+		}
+	}
+
+	return returnValue;
+}
+
+STATE start() {
+	STATE returnValue = START;
+	uint8_t buf[MAX_LEN];
+	uint8_t packet[MAX_LEN];
+	int32_t buf_size = bufferSize;
+	int32_t recv_check = 0;
+	uint8_t flag = 0;
+	int32_t seq_num = 0;
+	
+	if (udp_client_setup(inet_ntoa(remoteMachine), remotePort, &server) < 0) {
+		perror("Error on udp_client_setup exiting...");
+		exit(-1);
+	} 
+	
+	buf_size = htonl(buf_size);
+
+	memcpy(buf, &bufferSize, 4);
+	send_buf(buf, 4, &server, 1, 0, packet);
+	printf("__start() send buf\n");
+
+	if (select_call(server.sk_num, 1, 0, NOT_NULL) == 1) {
+		recv_check = recv_buf(packet, MAX_LEN, server.sk_num, &server, &flag, &seq_num);
+		printf("__recieved buff from server with flag %d\n", flag);
+
+		if(recv_check == -1) {
+			return returnValue;
+		} else if (flag == 2) {
+			returnValue = FILENAME;
+		}
+	} else {
+		close(server.sk_num);
+		printf("_socket closed\n");
+		attemptCount++;
+		printf("_attemptCount is : %d\n",attemptCount );
+		if (attemptCount > 9) {
+			printf("Server Unreachable, exiting...\n");
+			state = DONE;
+		}
+	}
+	return returnValue;
 }

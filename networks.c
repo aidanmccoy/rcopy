@@ -106,7 +106,10 @@ int32_t recv_buf(uint8_t * buf, int32_t len, int32_t recv_sk_num, Connection * c
 	int32_t recv_len = 0;
 	int32_t dataLen = 0;
 
+	//printf("___recv_len vars declared\n");
+
 	recv_len = safeRecv(recv_sk_num, data_buf, len, connection);
+	//printf("___recv_len is ->%d<-\n", recv_len);
 
 	dataLen = retrieveHeader(data_buf, recv_len, flag, seq_num);
 
@@ -121,10 +124,13 @@ int32_t safeRecv(int recv_sk_num, char * data_buf, int len, Connection * connect
 	int recv_len = 0;
 	uint32_t remote_len = sizeof(struct sockaddr_in);
 
+	//printf("____safeRecv Vars declared\n");
+
 	if ((recv_len = recvfrom(recv_sk_num, data_buf, len, 0, (struct sockaddr *) &(connection->remote), &remote_len)) < 0) {
 		perror("recv_buf, recvfrom");
 		exit(-1);
 	}
+	//printf("____safeRecv recv len is ->%d<-\n", recv_len);
 
 	connection->len = remote_len;
 
@@ -146,4 +152,46 @@ int retrieveHeader(char * data_buf, int recv_len, uint8_t * flag, int32_t * seq_
 	}
 
 	return returnValue;
+}
+
+int32_t send_buf(uint8_t * buf, uint32_t len, Connection * connection, uint8_t flag, uint32_t seq_num, uint8_t *packet) {
+	int32_t sentLen = 0;
+	int32_t sendingLen = 0;
+
+	if(len > 0) {
+		memcpy(&packet[sizeof(Header)], buf, len);
+	}
+
+	sendingLen = createHeader(len, flag, seq_num, packet);
+
+	sentLen = safeSend(packet, sendingLen, connection);
+
+	return sentLen;
+}
+
+int createHeader(uint32_t len, uint8_t flag, uint32_t seq_num, uint8_t * packet) {
+	Header * aHeader = (Header *) packet;
+	uint16_t checksum = 0;
+
+	seq_num = htonl(seq_num);
+	memcpy(&(aHeader->seq_num), &seq_num, sizeof(seq_num));
+
+	aHeader->flag = flag;
+
+	memset(&(aHeader->checksum), 0, sizeof(checksum));
+	checksum = in_cksum((unsigned short *)packet, len + sizeof(Header));
+	memcpy(&(aHeader->checksum), &checksum, sizeof(checksum));
+
+	return len + sizeof(Header);
+}
+
+int32_t safeSend(uint8_t * packet, uint32_t len, Connection * connection) {
+	int send_len = 0;
+
+	if ((send_len = sendtoErr(connection->sk_num, packet, len, 0, (struct sockaddr *) &(connection->remote), connection->len)) < 0) {
+		perror("error in send_buf, send to call");
+		exit(-1);
+	}
+
+	return send_len;
 }

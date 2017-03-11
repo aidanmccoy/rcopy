@@ -38,6 +38,8 @@ struct connection {
 	uint32_t len;
 };
 
+/*Packet * createPacket(uint32_t seq_num, uint8_t flag, uint32_t packetSize, )
+*/
 int32_t udp_server(int32_t portNumber);
 
 int32_t udp_client_setup(char* hostname, uint16_t port_num, Connection *connection);
@@ -49,4 +51,13 @@ int32_t recv_buf(uint8_t * buf, int32_t len, int32_t recv_sk_num, Connection * c
 int32_t safeRecv(int recv_sk_num, char * data_buf, int len, Connection * connection);
 
 int retrieveHeader(char * data_buf, int recv_len, uint8_t * flag, int32_t * seq_num);
+
+int32_t send_buf(uint8_t * buf, uint32_t len, Connection * connection, uint8_t flag, uint32_t seq_num, uint8_t *packet);
+
+int createHeader(uint32_t len, uint8_t flag, uint32_t seq_num, uint8_t * packet);
+
+int32_t safeSend(uint8_t * packet, uint32_t len, Connection * connection);
+
+
+
 

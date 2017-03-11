@@ -5,6 +5,19 @@
 #include <sys/types.h>
 #include <stdint.h>
 
+
+typedef enum State STATE;
+
+enum State {
+	START, FILENAME, SENDPACKET, PROCESSPACKET, ACK, BYE, DONE
+};
+
+void process();
+
 void parseArgs(int, char**);
 
 void sendFile();
+
+STATE start();
+
+STATE filename();

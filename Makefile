@@ -76,4 +76,4 @@ rs:
 rc:
 	clear
 	@echo "RUNNING CLIENT..."
-	./rcopy localTest remoteTest 1 2 0 127.0.0.1 8080
+	./rcopy localTest remoteTest 10 1000 0 127.0.0.1 8080
