@@ -15,3 +15,7 @@ void initWindow();
 STATE filename();
 
 STATE start();
+
+STATE filenameok();
+
+STATE recvdata();

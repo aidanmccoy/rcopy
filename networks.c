@@ -16,6 +16,25 @@
 #include "networks.h"
 #include "cpe464.h"
 
+void printPacket(uint8_t * packet) {
+	int flag = *(packet + 6); 
+	printf("PACKET DATA================\n");
+	printf("  SEQ_NUM is        %d\n",  *(uint32_t *)packet);
+	printf("  Checksum is       %d\n", *(uint16_t *)(packet + 4));
+	printf("  Flag is           %d\n", *(uint8_t *)(packet + 6));
+
+	if (flag == 1) {
+	printf("  Buf_size is       %d\n", *(uint32_t *)(packet + 8));
+	}
+
+	if (flag == 3) {
+	printf("  Data is           %s\n", (char *)(packet + 8));
+	}
+
+
+	printf("PACKET DATA================DONE\n");
+}
+
 int32_t udp_server(int32_t portNumber) {
 
 	int sk = 0; 					//socket descriptor
@@ -81,9 +100,10 @@ int32_t select_call(int32_t socket_num, int32_t seconds, int32_t microseconds, i
 	struct timeval * timeout = NULL;
 	
 	if (set_null == NOT_NULL) {
-		aTimeout.tv_sec = seconds; // set timeout to 1 second
-		aTimeout.tv_usec = microseconds; // set timeout (in micro-second)
+		aTimeout.tv_sec = seconds;
+		aTimeout.tv_usec = microseconds;
 		timeout = &aTimeout;
+		printf("TIMEOUT Set\n");
 	}
 	
 	FD_ZERO(&fdvar); //reset variables

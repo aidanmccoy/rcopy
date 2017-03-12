@@ -28,6 +28,11 @@ int status;
 int32_t buf_size = 1500;
 int32_t remoteFile;
 int32_t windowSize;
+int32_t windowBottom = 0;
+int32_t windowTop = 0;
+int32_t windowNdx = 0;
+uint8_t * windowBuf;
+int32_t serverSeq = 0;
 
 
 void printGlobals() {
@@ -79,15 +84,23 @@ void process() {
 	while (state != DONE) {
 		switch (state) {
 			case START:
+
 				printf("\nCASE: START\n");
 				state = start();
 				break;
+
 			case FILENAME:
+
 				printf("\nCASE: FILENAME\n");
 				state = filename();
 				break;
+
 			case SENDPACKET:
+
+				printf("\nCASE: SENDPACKET\n");
+				state = sendpacket();
 				break;
+
 			case PROCESSPACKET:
 				break;
 			case ACK:
@@ -95,10 +108,49 @@ void process() {
 			case BYE:
 				break;
 			case DONE:
+				printf("CASE DONE\n");
+				exit(0);
 				break;
 
 		}
 	}
+}
+
+STATE sendpacket() {
+	int32_t len_read = 0;
+	uint8_t * buf = malloc(buf_size);
+
+	if (windowNdx == windowTop) {
+		printf("__send packet has reached window limit and needs ack\n");
+		return ACK;
+	} else {
+		len_read = read(remoteFile, buf, buf_size - 8);
+
+		switch (len_read) {
+			case -1:
+				perror("send_data, read error");
+				return DONE;
+				break;
+			case 0:
+				send_buf(buf, 1, &client, 10, serverSeq, buffer); //EOF packet
+				printf("__sent eof packet \n");
+				printPacket(buffer);
+				return ACK;
+				break;
+			default:
+				send_buf(buf, len_read, &client, 3, serverSeq, buffer); //Data packet
+				printf("__Sent data packet\n");
+				serverSeq++;
+				printPacket(buffer);
+				windowNdx++;
+
+
+		}
+	}
+	/*if (select_call(client.sk_num, 0, 0, NOT_NULL) == 1) {
+		return PROCESSPACKET;
+	} */
+	return SENDPACKET;
 }
 
 void parseArgs(int argc, char** argv) {
@@ -122,6 +174,7 @@ STATE start() {
 	}
 	printf("_buf_size is %d\n",buf_size );
 	send_buf(response, buf_size, &client, 2, 0, buffer);
+	printPacket(buffer);
 
 	return FILENAME;
 
@@ -142,11 +195,15 @@ STATE filename() {
 		printf("__filename is %s\n", fileName);
 		printf("__windowSize is %d\n", windowSize);
 
+		windowTop = windowSize;
+		windowBuf = malloc(MAX_LEN * windowSize);
+
 		if ((remoteFile = open(fileName, O_RDONLY)) < 0) {
 			send_buf(response, 0, &client, 9, 0, buffer); //Bad file name
 			printf("__Sent bad flag 9 packed, bad file name\n");
 			return BYE;
 		} else {
+			printf("__Good file name, file opened\n");
 			return SENDPACKET;
 		}
 	//} else

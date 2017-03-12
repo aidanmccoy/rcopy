@@ -5,6 +5,7 @@
 #include <sys/types.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 
 #include "rcopy.h"
@@ -24,6 +25,7 @@ STATE state = START;
 Connection server;
 int attemptCount = 0;
 int sequenceNum = 0;
+int32_t localFileDesc;
 
 
 void printVars() {
@@ -63,16 +65,25 @@ int main(int argc, char** argv) {
 				break;
 
 			case FILENAMEOK:
+
+				printf("\nCASE FILENAMEOK\n");
+				state = filenameok();
 				break;
+
 			case RECVDATA:
+				printf("\nCASE RECVDATA\n");
+				state = recvdata();
 				break;
+
 			case ACK:
 				break;
 			case SREJ:
 				break;
 			case BYE:
+				printf("\nCASE BYE\n");
 				break;
 			case DONE:
+				printf("\nCASE DONE\n");
 				break;
 		}
 	}
@@ -80,6 +91,7 @@ int main(int argc, char** argv) {
 	printf("DONE\n");	
 
 }
+
 
 void parseArgs(int argc, char** argv) {
 	if (argc != 8) {
@@ -140,7 +152,7 @@ STATE filename() {
 			printf("__Bad file name\n");
 			returnValue = BYE;
 		} 
-		else if (flag == 8) { //Good file name flag
+		else if (flag == 3) { //Good file name because is data packet
 			printf("__good file name\n");
 			returnValue = FILENAMEOK;
 		}
@@ -167,6 +179,7 @@ STATE start() {
 
 	memcpy(buf, &bufferSize, 4);
 	send_buf(buf, 4, &server, 1, 0, packet);
+	printPacket(packet);
 	printf("__start() send buf\n");
 
 	if (select_call(server.sk_num, 1, 0, NOT_NULL) == 1) {
@@ -189,4 +202,35 @@ STATE start() {
 		}
 	}
 	return returnValue;
+}
+
+STATE filenameok() {
+	localFileDesc = open (localFile, O_CREAT | O_TRUNC | O_WRONLY, 0600);
+	if (localFileDesc < 1) {
+		perror("Error on file open");
+		return DONE;
+	} else {
+		return RECVDATA;
+	}
+}
+
+STATE recvdata() {
+	//int32_t read_len = 0;
+	uint8_t * buffer = malloc(MAX_LEN);
+	uint8_t flag = 0;
+	int32_t seq_num;
+
+	printf("Before select call\n");
+	if (select_call(server.sk_num, 10, 0, NOT_NULL) == 1) {
+		recv_buf(buffer, MAX_LEN, server.sk_num, &server, &flag, &seq_num);
+		return RECVDATA;
+
+	} else {
+		printf("Server timed out after 10 seconds\n");
+		return DONE;
+	}
+
+	
+
+
 }

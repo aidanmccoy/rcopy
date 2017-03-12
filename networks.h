@@ -58,6 +58,8 @@ int createHeader(uint32_t len, uint8_t flag, uint32_t seq_num, uint8_t * packet)
 
 int32_t safeSend(uint8_t * packet, uint32_t len, Connection * connection);
 
+void printPacket(uint8_t * packet);
+
 
 
 
