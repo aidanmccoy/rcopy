@@ -23,3 +23,9 @@ STATE start();
 STATE filename();
 
 STATE sendpacket();
+
+STATE processpacket();
+
+STATE ack();
+
+void initWindow();

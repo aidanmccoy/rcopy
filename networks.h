@@ -10,27 +10,32 @@ typedef struct header Header;
 
 typedef struct packet Packet;
 
-typedef struct windowData WindowData;
-
+/*typedef struct windowData WindowData;
+*/
 struct header{
 	uint32_t seq_num;
 	uint16_t checksum;
 	uint8_t flag;
 };
 
-struct windowData {
-	Packet * buffer;
-	int used;
+struct packet {
+	uint8_t buffer[MAX_LEN];
+	uint8_t valid;
 };
 
+/*struct windowData {
+	Packet * buffer;
+	int used;
+};*/
 
-struct packet {
+
+/*struct packet {
 	uint32_t seq_num;
 	uint16_t checksum;
 	uint8_t flag;
 	uint32_t packetSize;
 	uint8_t payLoad[MAX_LEN - 12];
-};
+};*/
 
 struct connection {
 	int32_t sk_num;

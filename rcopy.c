@@ -26,6 +26,11 @@ Connection server;
 int attemptCount = 0;
 int sequenceNum = 0;
 int32_t localFileDesc;
+int32_t rrNumber = 0;
+int32_t windowBottom = 0;
+int32_t windowNdx = 0;
+int32_t windowTop;
+int done = 0;
 
 
 void printVars() {
@@ -44,7 +49,7 @@ int main(int argc, char** argv) {
 	
 	parseArgs(argc, argv);
 
-	printVars();
+	//printVars();
 
 	sendtoErr_init(errorPercent, DROP_ON, FLIP_ON, DEBUG_OFF, RSEED_ON);
 
@@ -76,12 +81,19 @@ int main(int argc, char** argv) {
 				break;
 
 			case ACK:
+				
+				printf("\nCASE ACK\n");
+				state = ack();
 				break;
+
 			case SREJ:
+
+				printf("\nCASE SREJ\n");
 				break;
-			case BYE:
+
+			/*case BYE:
 				printf("\nCASE BYE\n");
-				break;
+				break;*/
 			case DONE:
 				printf("\nCASE DONE\n");
 				break;
@@ -114,14 +126,16 @@ void parseArgs(int argc, char** argv) {
 	errorPercent = atof(argv[5]);
 	inet_aton(argv[6], &remoteMachine);
 	remotePort = atoi(argv[7]);
+
+	windowTop = windowSize;
 }
 
 void initWindow() {
-	windowBuffer = malloc(sizeof(WindowData) * windowSize);
+	windowBuffer = malloc(windowSize * sizeof(Packet));
 }
 
 STATE filename() {
-	printf("_filename call\n");
+	//printf("_filename call\n");
 
 	STATE returnValue = FILENAME;
 	uint8_t packet[MAX_LEN];
@@ -139,10 +153,10 @@ STATE filename() {
 	memcpy(buf + 4, remoteFile, nameLen);
 
 	send_buf(buf, nameLen + 4, &server, 1, 0, packet);
-	printf("__filename() send buf\n");
+	//printf("__filename() send buf\n");
 
 	if (select_call(server.sk_num, 1, 0, NOT_NULL) == 1) {
-		printf("__in filename select call\n");
+		//printf("__in filename select call\n");
 		recv_check = recv_buf(packet, MAX_LEN, server.sk_num, &server, &flag, &seq_num);
 
 		if (recv_check == -1) {
@@ -150,10 +164,10 @@ STATE filename() {
 		}
 		if (flag == 9) {//Bad file name
 			printf("__Bad file name\n");
-			returnValue = BYE;
+			returnValue = DONE;
 		} 
 		else if (flag == 3) { //Good file name because is data packet
-			printf("__good file name\n");
+			//printf("__good file name\n");
 			returnValue = FILENAMEOK;
 		}
 	}
@@ -179,12 +193,12 @@ STATE start() {
 
 	memcpy(buf, &bufferSize, 4);
 	send_buf(buf, 4, &server, 1, 0, packet);
-	printPacket(packet);
-	printf("__start() send buf\n");
+	//printPacket(packet);
+	//printf("__start() send buf\n");
 
 	if (select_call(server.sk_num, 1, 0, NOT_NULL) == 1) {
 		recv_check = recv_buf(packet, MAX_LEN, server.sk_num, &server, &flag, &seq_num);
-		printf("__recieved buff from server with flag %d\n", flag);
+	//	printf("__recieved buff from server with flag %d\n", flag);
 
 		if(recv_check == -1) {
 			return returnValue;
@@ -214,23 +228,78 @@ STATE filenameok() {
 	}
 }
 
+STATE ack() {
+	int32_t flag = 5;
+	uint8_t packet[MAX_LEN];
+
+	send_buf((uint8_t *)&windowBottom, 4, &server, flag, sequenceNum, packet);
+	sequenceNum++;
+	printPacket(packet);
+	//printf("__done is %d\n", done);
+	if (done) {
+		return DONE;
+	}
+	return RECVDATA;
+}
+
 STATE recvdata() {
-	//int32_t read_len = 0;
+	int32_t read_len = 0;
 	uint8_t * buffer = malloc(MAX_LEN);
 	uint8_t flag = 0;
 	int32_t seq_num;
 
-	printf("Before select call\n");
+	//printf("Before select call\n");
 	if (select_call(server.sk_num, 10, 0, NOT_NULL) == 1) {
-		recv_buf(buffer, MAX_LEN, server.sk_num, &server, &flag, &seq_num);
-		return RECVDATA;
+		read_len = recv_buf(buffer, MAX_LEN, server.sk_num, &server, &flag, &seq_num);
+		if (read_len == -1) { //CRC Error
+			//Window ndx = bottom
+			//Send srej
+			return SREJ;
+		}
 
-	} else {
-		printf("Server timed out after 10 seconds\n");
-		return DONE;
+		if (flag == 10) { //EOF Packet
+			//SEND RR
+			printf("EOF PACKET RECIEVED...DONE\n");
+			done = 1;
+			return ACK;
+		}
+		printf("Recieving seq_num is %d\n", seq_num);
+		printf("windowBottom is %d\n", windowBottom);
+		if(seq_num == windowBottom) {
+			write(localFileDesc, buffer, read_len);
+			windowBottom++;
+			printf("__Packet with correct seq_num\n");
+
+			if (windowNdx > windowBottom) {
+				writeValidPackets();
+			}
+			return ACK;
+		}
+
+		if (seq_num > windowBottom) {
+			memcpy(windowBuffer[seq_num % windowSize].buffer, buffer, MAX_LEN);
+			windowBuffer[seq_num % windowSize].valid = 1;
+			printf("__Packet with INCORRECT seq_num\n");
+			windowNdx = seq_num;
+			return ACK;
+		}
+		
+
 	}
+	printf("Server timed out after 10 seconds\n");
+	return DONE;
 
-	
+}
 
+void writeValidPackets() {
+	int ndx;
 
+	for (ndx = 1; ndx < windowSize; ndx ++) {
+		if (windowBuffer[ndx].valid) {
+			write(localFileDesc, windowBuffer[ndx].buffer, bufferSize);
+			windowBuffer[ndx].valid = 0;
+		} else {
+			break;
+		}
+	}
 }

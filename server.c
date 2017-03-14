@@ -33,6 +33,9 @@ int32_t windowTop = 0;
 int32_t windowNdx = 0;
 uint8_t * windowBuf;
 int32_t serverSeq = 0;
+int done = 0;
+Packet * windowBuffer;
+
 
 
 void printGlobals() {
@@ -45,7 +48,7 @@ void printGlobals() {
 int main(int argc, char *argv[])
 {
 	parseArgs(argc, argv);
-	printGlobals();
+	//printGlobals();
 
 	sendtoErr_init(errorPercent, DROP_ON, FLIP_ON, DEBUG_ON, RSEED_ON);
 
@@ -78,7 +81,14 @@ int main(int argc, char *argv[])
 	return 0;
 }
 
+void initWindow() {
+	windowBuffer = malloc(windowSize * sizeof(Packet));
+}
+
 void process() {
+
+	//sendtoErr_init(errorPercent, DROP_ON, FLIP_ON, DEBUG_ON, RSEED_ON);
+
 	STATE state = START;
 
 	while (state != DONE) {
@@ -102,9 +112,17 @@ void process() {
 				break;
 
 			case PROCESSPACKET:
+
+				printf("\nCASE: PROCESSPACKET\n");
+				state = processpacket();
 				break;
+
 			case ACK:
+
+				printf("\nCASE: ACK\n");
+				state = ack();
 				break;
+
 			case BYE:
 				break;
 			case DONE:
@@ -114,6 +132,51 @@ void process() {
 
 		}
 	}
+}
+
+STATE processpacket() {
+	uint8_t inBuf[MAX_LEN];
+	uint8_t outBuf[MAX_LEN];
+	int32_t rrNumber;
+	int32_t srejNumber;
+
+	int32_t crc = recv_buf(inBuf, MAX_LEN, client.sk_num, &client, &flag, &seq_num);
+
+	if (crc == -1) {	//CRC failure
+		return SENDPACKET;
+	}
+
+	if (flag == 5) {  //RR packet
+		if (done == 1) {
+			return DONE;
+		}
+		rrNumber = *(int32_t *)inBuf;
+		printf("__RRNumber is %d\n",rrNumber);
+		windowTop = windowTop + (rrNumber - windowBottom);
+		windowBottom = rrNumber;
+
+		printf("__Window Bottom is %d\n",windowBottom );
+		printf("__Window ndx is %d\n", windowNdx);
+		printf("__Window top is %d\n", windowTop);
+
+		return SENDPACKET;
+	}
+
+	if (flag == 6) { //SREJ Packet
+		srejNumber = *(int32_t *)inBuf;
+		send_buf(windowBuffer[srejNumber % windowSize].buffer, MAX_LEN, &client, 3, srejNumber, outBuf);
+	}
+	return SENDPACKET;
+}
+
+STATE ack() {
+	if (select_call(client.sk_num, 10, 0, NOT_NULL) == 1) {
+		return PROCESSPACKET;
+	} else {
+		printf("ACK selectcall timeout\n");
+		return DONE;
+	}
+
 }
 
 STATE sendpacket() {
@@ -133,23 +196,29 @@ STATE sendpacket() {
 				break;
 			case 0:
 				send_buf(buf, 1, &client, 10, serverSeq, buffer); //EOF packet
+				serverSeq++;
 				printf("__sent eof packet \n");
+				done = 1;
 				printPacket(buffer);
 				return ACK;
 				break;
 			default:
 				send_buf(buf, len_read, &client, 3, serverSeq, buffer); //Data packet
-				printf("__Sent data packet\n");
 				serverSeq++;
+				//printf("__Sent data packet\n");
 				printPacket(buffer);
+				memcpy(windowBuffer[serverSeq % windowSize].buffer, buf, MAX_LEN);
+
 				windowNdx++;
 
 
 		}
 	}
-	/*if (select_call(client.sk_num, 0, 0, NOT_NULL) == 1) {
+	if (select_call(client.sk_num, 0, 0, NOT_NULL) == 1) {
 		return PROCESSPACKET;
-	} */
+	} else {
+		printf("__Select call timeout\n");
+	}
 	return SENDPACKET;
 }
 
@@ -172,9 +241,9 @@ STATE start() {
 		perror("Start, open socket");
 		exit(-1);
 	}
-	printf("_buf_size is %d\n",buf_size );
+	//printf("_buf_size is %d\n",buf_size );
 	send_buf(response, buf_size, &client, 2, 0, buffer);
-	printPacket(buffer);
+	//printPacket(buffer);
 
 	return FILENAME;
 
@@ -184,26 +253,29 @@ STATE filename() {
 	char * fileName = malloc(100);
 	uint8_t response[1];
 	// if (select_call(client.sk_num, 1, 0, NOT_NULL) == 1) {
-		printf("___inside selectcall\n");
+		//printf("___inside selectcall\n");
 		recv_len = recv_buf(buffer, MAX_LEN, client.sk_num, &client, &flag, &seq_num);
-		printf("___buffer recieved\n");
-		printf("___size of Header is %d\n",(int)sizeof(Header) );
+		//printf("___buffer recieved\n");
+		//printf("___size of Header is %d\n",(int)sizeof(Header) );
 
 		memcpy(&windowSize, buffer, 4);
 		memcpy(fileName, buffer + 4, recv_len - 4);
 		
-		printf("__filename is %s\n", fileName);
-		printf("__windowSize is %d\n", windowSize);
+		//printf("__filename is %s\n", fileName);
+		//printf("__windowSize is %d\n", windowSize);
 
 		windowTop = windowSize;
 		windowBuf = malloc(MAX_LEN * windowSize);
+		initWindow();
 
 		if ((remoteFile = open(fileName, O_RDONLY)) < 0) {
 			send_buf(response, 0, &client, 9, 0, buffer); //Bad file name
-			printf("__Sent bad flag 9 packed, bad file name\n");
+			//printf("__Sent bad flag 9 packed, bad file name\n");
 			return BYE;
 		} else {
-			printf("__Good file name, file opened\n");
+			//printf("__Good file name, file opened\n");
+
+			send_buf(response, 0, &client, 3, 0, buffer);
 			return SENDPACKET;
 		}
 	//} else

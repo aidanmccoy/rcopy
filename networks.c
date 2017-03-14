@@ -19,7 +19,7 @@
 void printPacket(uint8_t * packet) {
 	int flag = *(packet + 6); 
 	printf("PACKET DATA================\n");
-	printf("  SEQ_NUM is        %d\n",  *(uint32_t *)packet);
+	printf("  SEQ_NUM is        %d\n",  ntohl(*(uint32_t *)packet));
 	printf("  Checksum is       %d\n", *(uint16_t *)(packet + 4));
 	printf("  Flag is           %d\n", *(uint8_t *)(packet + 6));
 
@@ -103,7 +103,7 @@ int32_t select_call(int32_t socket_num, int32_t seconds, int32_t microseconds, i
 		aTimeout.tv_sec = seconds;
 		aTimeout.tv_usec = microseconds;
 		timeout = &aTimeout;
-		printf("TIMEOUT Set\n");
+		//printf("TIMEOUT Set\n");
 	}
 	
 	FD_ZERO(&fdvar); //reset variables

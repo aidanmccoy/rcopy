@@ -5,7 +5,7 @@
 typedef enum State STATE;
 
 enum State {
-	START, FILENAME, FILENAMEOK, RECVDATA, ACK, SREJ, BYE, DONE
+	START, FILENAME, FILENAMEOK, RECVDATA, ACK, SREJ, DONE
 };
 
 void parseArgs(int, char**);
@@ -19,3 +19,7 @@ STATE start();
 STATE filenameok();
 
 STATE recvdata();
+
+STATE ack();
+
+void writeValidPackets();
