@@ -7,11 +7,9 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-
 #include "rcopy.h"
 #include "cpe464.h"
 #include "networks.h"
-
 
 char* localFile;
 char* remoteFile;
@@ -25,13 +23,12 @@ STATE state = START;
 Connection server;
 int attemptCount = 0;
 int sequenceNum = 0;
-int32_t localFileDesc;
+int32_t localFileDesc = 0;
 int32_t rrNumber = 0;
 int32_t windowBottom = 0;
 int32_t windowNdx = 0;
 int32_t windowTop;
 int done = 0;
-
 
 void printVars() {
 	printf("GOLBALS-------\n");
@@ -89,11 +86,9 @@ int main(int argc, char** argv) {
 			case SREJ:
 
 				printf("\nCASE SREJ\n");
+				srej();
 				break;
 
-			/*case BYE:
-				printf("\nCASE BYE\n");
-				break;*/
 			case DONE:
 				printf("\nCASE DONE\n");
 				break;
@@ -134,45 +129,62 @@ void initWindow() {
 	windowBuffer = malloc(windowSize * sizeof(Packet));
 }
 
-STATE filename() {
-	//printf("_filename call\n");
+STATE srej() {
+	int32_t recv_len = 0;
+	uint8_t inbuf[MAX_LEN];
+	uint8_t flag;
+	int32_t seq_num;
 
-	STATE returnValue = FILENAME;
+	if (select_call(server.sk_num, 10, 0, NOT_NULL) == 0) {
+		printf("Cient timeout\n");
+		return DONE;
+	}
+
+	recv_len = recv_buf(inbuf, MAX_LEN, server.sk_num, &server, &flag, &seq_num);
+	/*printf("SREJ Packet recieved is:\n");
+	printf("-->%s\n",(char *) (inbuf));
+	printf("--> sequence number %d\n", seq_num);
+	printf("--> current window bottom is %d\n", windowBottom);
+*/
+	if (recv_len == -1) {
+		printf("__Srej CRC Error\n");
+	}
+
+	if (seq_num == windowBottom) {
+		write(localFileDesc, inbuf, bufferSize);
+		//printf("+++++Written to buffer > %s\n", inbuf);
+		windowBottom++;
+		//printf("__Packet with correct seq_num 1\n");
+		ack();
+
+		writeValidPackets();
+
+
+		return RECVDATA;
+	}
+
+	if (seq_num > windowBottom) {
+		memcpy(windowBuffer[seq_num % windowSize].buffer, inbuf, MAX_LEN);
+			windowBuffer[seq_num % windowSize].valid = 1;
+	}
+	printWindow(windowBuffer, windowSize);
+
+	return SREJ;
+}
+
+STATE filename() {
+
 	uint8_t packet[MAX_LEN];
 	uint8_t buf[MAX_LEN];
-	uint8_t flag = 0;
-	int32_t seq_num = 0;
+
 	int32_t nameLen = strlen(remoteFile) + 1;
-	int32_t recv_check = 0;
-	//static int retryCount = 0;
-	//int32_t buf_size = bufferSize;
-	
-	//int32_t win_size = htonl(windowSize);
 
 	memcpy(buf, &windowSize, 4);
 	memcpy(buf + 4, remoteFile, nameLen);
 
 	send_buf(buf, nameLen + 4, &server, 1, 0, packet);
-	//printf("__filename() send buf\n");
 
-	if (select_call(server.sk_num, 1, 0, NOT_NULL) == 1) {
-		//printf("__in filename select call\n");
-		recv_check = recv_buf(packet, MAX_LEN, server.sk_num, &server, &flag, &seq_num);
-
-		if (recv_check == -1) {
-			return returnValue;
-		}
-		if (flag == 9) {//Bad file name
-			printf("__Bad file name\n");
-			returnValue = DONE;
-		} 
-		else if (flag == 3) { //Good file name because is data packet
-			//printf("__good file name\n");
-			returnValue = FILENAMEOK;
-		}
-	}
-
-	return returnValue;
+	return RECVDATA;
 }
 
 STATE start() {
@@ -193,12 +205,9 @@ STATE start() {
 
 	memcpy(buf, &bufferSize, 4);
 	send_buf(buf, 4, &server, 1, 0, packet);
-	//printPacket(packet);
-	//printf("__start() send buf\n");
 
 	if (select_call(server.sk_num, 1, 0, NOT_NULL) == 1) {
 		recv_check = recv_buf(packet, MAX_LEN, server.sk_num, &server, &flag, &seq_num);
-	//	printf("__recieved buff from server with flag %d\n", flag);
 
 		if(recv_check == -1) {
 			return returnValue;
@@ -235,7 +244,6 @@ STATE ack() {
 	send_buf((uint8_t *)&windowBottom, 4, &server, flag, sequenceNum, packet);
 	sequenceNum++;
 	printPacket(packet);
-	//printf("__done is %d\n", done);
 	if (done) {
 		return DONE;
 	}
@@ -248,40 +256,57 @@ STATE recvdata() {
 	uint8_t flag = 0;
 	int32_t seq_num;
 
-	//printf("Before select call\n");
 	if (select_call(server.sk_num, 10, 0, NOT_NULL) == 1) {
 		read_len = recv_buf(buffer, MAX_LEN, server.sk_num, &server, &flag, &seq_num);
+		
+		if (localFileDesc == 0) {
+			localFileDesc = open (localFile, O_CREAT | O_TRUNC | O_WRONLY, 0600);
+				if (localFileDesc < 1) {
+				perror("Error on file open");
+				return DONE;
+			}
+		}
+
 		if (read_len == -1) { //CRC Error
-			//Window ndx = bottom
-			//Send srej
+			windowNdx = windowBottom;
+			send_buf((uint8_t *)&windowBottom, MAX_LEN, &server, 6, sequenceNum, buffer);
+			printPacket(buffer);
 			return SREJ;
 		}
 
+		if (flag == 9) { //Bad file name packet
+			printf("Bad File Name\n");
+			return DONE;
+		}
+
 		if (flag == 10) { //EOF Packet
-			//SEND RR
 			printf("EOF PACKET RECIEVED...DONE\n");
 			done = 1;
-			return ACK;
+			ack();
+			return DONE;
 		}
-		printf("Recieving seq_num is %d\n", seq_num);
-		printf("windowBottom is %d\n", windowBottom);
+
+		//printf("Recieving seq_num is %d\n", seq_num);
+		//printf("windowBottom is %d\n", windowBottom);
 		if(seq_num == windowBottom) {
 			write(localFileDesc, buffer, read_len);
+			//printf("+++++Written to buffer ->%s\n",(char *)buffer );
 			windowBottom++;
-			printf("__Packet with correct seq_num\n");
+			ack();
+			//printf("__Packet with correct seq_num\n");
 
-			if (windowNdx > windowBottom) {
-				writeValidPackets();
-			}
-			return ACK;
+			writeValidPackets();
+			
+			return RECVDATA;
 		}
 
 		if (seq_num > windowBottom) {
 			memcpy(windowBuffer[seq_num % windowSize].buffer, buffer, MAX_LEN);
 			windowBuffer[seq_num % windowSize].valid = 1;
-			printf("__Packet with INCORRECT seq_num\n");
+			//printf("__Packet with INCORRECT seq_num\n");
 			windowNdx = seq_num;
-			return ACK;
+			ack();
+			return RECVDATA;
 		}
 		
 
@@ -292,14 +317,16 @@ STATE recvdata() {
 }
 
 void writeValidPackets() {
-	int ndx;
+	int max = windowBottom + windowSize;
 
-	for (ndx = 1; ndx < windowSize; ndx ++) {
-		if (windowBuffer[ndx].valid) {
-			write(localFileDesc, windowBuffer[ndx].buffer, bufferSize);
-			windowBuffer[ndx].valid = 0;
-		} else {
-			break;
+	for (windowBottom = windowBottom; windowBottom < max; windowBottom++) {
+		if (windowBuffer[windowBottom % windowSize].valid) {
+			write(localFileDesc, windowBuffer[windowBottom % windowSize].buffer, bufferSize - 8);
+			// printf("+++++Written to buffer -->%s\n",windowBuffer[windowBottom % windowSize].buffer);
+			windowBuffer[windowBottom % windowSize].valid = 0;
+			ack();
+		} else {			
+			return;
 		}
 	}
 }

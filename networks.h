@@ -65,6 +65,8 @@ int32_t safeSend(uint8_t * packet, uint32_t len, Connection * connection);
 
 void printPacket(uint8_t * packet);
 
+void printWindow(Packet * window, int win_size);
+
 
 
 

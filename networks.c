@@ -16,6 +16,17 @@
 #include "networks.h"
 #include "cpe464.h"
 
+void printWindow(Packet * window, int win_size) {
+	int ndx;
+	printf("------------Window------------------\n");
+	for (ndx = 0; ndx < win_size; ndx++) {
+		printf("\nWindow location -->%d\n", ndx);
+		printf("Data is -->%s\n", (char *)window[ndx].buffer);
+		printf("Valid flag is -->%d\n", window[ndx].valid);
+	}
+	printf("------------------------------------\n");
+}
+
 void printPacket(uint8_t * packet) {
 	int flag = *(packet + 6); 
 	printf("PACKET DATA================\n");
@@ -29,6 +40,10 @@ void printPacket(uint8_t * packet) {
 
 	if (flag == 3) {
 	printf("  Data is           %s\n", (char *)(packet + 8));
+	}
+
+	if (flag == 6) {
+	printf("  SREJ packet # is  %d\n", *(uint32_t *)(packet + 8));
 	}
 
 

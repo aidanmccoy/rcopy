@@ -12,9 +12,6 @@
 #include "cpe464.h"
 #include "networks.h"
 
-
-
-
 static float errorPercent;
 int32_t portNumber = 0;
 pid_t pid;
@@ -36,21 +33,11 @@ int32_t serverSeq = 0;
 int done = 0;
 Packet * windowBuffer;
 
-
-
-void printGlobals() {
-	printf("GLOBALS------\n");
-	printf("  errorPercent is  %f\n", errorPercent);
-	printf("  portNumber is    %d\n", portNumber);
-	printf("GLOBALS------DONE\n");
-}
-
 int main(int argc, char *argv[])
 {
 	parseArgs(argc, argv);
-	//printGlobals();
 
-	sendtoErr_init(errorPercent, DROP_ON, FLIP_ON, DEBUG_ON, RSEED_ON);
+	sendtoErr_init(errorPercent, DROP_ON, FLIP_OFF, DEBUG_ON, RSEED_OFF);
 
 	serverSK = udp_server(portNumber);
 	printf("UDP Server set up...\n");
@@ -86,8 +73,6 @@ void initWindow() {
 }
 
 void process() {
-
-	//sendtoErr_init(errorPercent, DROP_ON, FLIP_ON, DEBUG_ON, RSEED_ON);
 
 	STATE state = START;
 
@@ -165,6 +150,7 @@ STATE processpacket() {
 	if (flag == 6) { //SREJ Packet
 		srejNumber = *(int32_t *)inBuf;
 		send_buf(windowBuffer[srejNumber % windowSize].buffer, MAX_LEN, &client, 3, srejNumber, outBuf);
+		printPacket(outBuf);
 	}
 	return SENDPACKET;
 }
@@ -204,14 +190,14 @@ STATE sendpacket() {
 				break;
 			default:
 				send_buf(buf, len_read, &client, 3, serverSeq, buffer); //Data packet
-				serverSeq++;
-				//printf("__Sent data packet\n");
+				
 				printPacket(buffer);
 				memcpy(windowBuffer[serverSeq % windowSize].buffer, buf, MAX_LEN);
+				windowBuffer[serverSeq % windowSize].valid = 1;
+				serverSeq++;
+				printWindow(windowBuffer, windowSize);
 
 				windowNdx++;
-
-
 		}
 	}
 	if (select_call(client.sk_num, 0, 0, NOT_NULL) == 1) {
@@ -241,9 +227,7 @@ STATE start() {
 		perror("Start, open socket");
 		exit(-1);
 	}
-	//printf("_buf_size is %d\n",buf_size );
 	send_buf(response, buf_size, &client, 2, 0, buffer);
-	//printPacket(buffer);
 
 	return FILENAME;
 
@@ -252,17 +236,11 @@ STATE start() {
 STATE filename() {
 	char * fileName = malloc(100);
 	uint8_t response[1];
-	// if (select_call(client.sk_num, 1, 0, NOT_NULL) == 1) {
-		//printf("___inside selectcall\n");
+
 		recv_len = recv_buf(buffer, MAX_LEN, client.sk_num, &client, &flag, &seq_num);
-		//printf("___buffer recieved\n");
-		//printf("___size of Header is %d\n",(int)sizeof(Header) );
 
 		memcpy(&windowSize, buffer, 4);
 		memcpy(fileName, buffer + 4, recv_len - 4);
-		
-		//printf("__filename is %s\n", fileName);
-		//printf("__windowSize is %d\n", windowSize);
 
 		windowTop = windowSize;
 		windowBuf = malloc(MAX_LEN * windowSize);
@@ -270,14 +248,12 @@ STATE filename() {
 
 		if ((remoteFile = open(fileName, O_RDONLY)) < 0) {
 			send_buf(response, 0, &client, 9, 0, buffer); //Bad file name
-			//printf("__Sent bad flag 9 packed, bad file name\n");
-			return BYE;
+			printf("__Sent bad flag 9 packet, bad file name\n");
+			return DONE;
 		} else {
-			//printf("__Good file name, file opened\n");
+			printf("Good file name, file opened\n");
 
-			send_buf(response, 0, &client, 3, 0, buffer);
 			return SENDPACKET;
 		}
-	//} else
 	return FILENAME;
 }			

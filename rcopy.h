@@ -23,3 +23,5 @@ STATE recvdata();
 STATE ack();
 
 void writeValidPackets();
+
+STATE srej();
