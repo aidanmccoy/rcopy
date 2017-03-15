@@ -117,7 +117,6 @@ void process() {
 
 		}
 	}
-	return 0;
 }
 
 STATE processpacket() {
